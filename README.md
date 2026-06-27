@@ -20,11 +20,11 @@ El sistema cuenta con tres entornos completamente diferenciados mediante roles:
 
 | Servicio | Tarifa | Duración | Ícono (`styles.css`) |
 | :--- | :--- | :--- | :--- |
-| **Corte de cabello** | 15.00 Soles | 30 min | `.icon-scissors` |
-| **Corte + Barba** | 22.00 Soles | 45 min | `.icon-razor` |
-| **Arreglo de barba** | 10.00 Soles | 20 min | `.icon-beard` |
-| **Tinte completo** | 45.00 Soles | 90 min | `.icon-paint` |
-| **Tratamiento capilar**| 30.00 Soles | 60 min | `.icon-spark` |
+| **Corte de cabello** | 15.00 Soles | 30 min |
+| **Corte + Barba** | 22.00 Soles | 45 min |
+| **Arreglo de barba** | 10.00 Soles | 20 min |
+| **Tinte completo** | 45.00 Soles | 90 min |
+| **Tratamiento capilar**| 30.00 Soles | 60 min |
 
 ---
 
