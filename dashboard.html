@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mi agenda — BarberReserva</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-inner">
+      <a class="brand" href="index.html"><span class="brand-dot"></span> BarberReserva</a>
+      <div class="nav-spacer"></div>
+      <div id="nav-actions"></div>
+    </div>
+  </nav>
+
+  <main class="container">
+    <div class="profile-hero" id="hero" style="margin-bottom:24px"></div>
+    <h2 style="margin:0 0 14px">Mi agenda</h2>
+    <p class="muted" style="margin:0 0 14px">Selecciona un día del calendario para ver tus citas.</p>
+
+    <div class="cal-wrap">
+      <div id="cal-container"></div>
+      <div class="day-panel" id="day-panel"></div>
+    </div>
+  </main>
+
+  <script src="shared.js"></script>
+  <script>
+    const me = DB.me();
+    if (!me) location.href = 'login.html';
+    else if (me.role !== 'employee' && me.role !== 'admin') location.href = 'index.html';
+    else {
+      document.getElementById('hero').innerHTML = `
+        <img src="${avatarUrl(me.name, 220)}" alt="" />
+        <div>
+          <div class="pname">${escapeHtml(me.name)}</div>
+          <span class="prole">${me.role === 'admin' ? 'Administrador' : 'Trabajador'}</span>
+          <div class="muted" style="margin-top:8px">${escapeHtml(me.email)}${me.phone ? ' · ' + escapeHtml(me.phone) : ''}</div>
+        </div>`;
+
+      const MONTHS_FULL = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+      const DOWS_FULL = ['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
+      function fmtLong(ds) {
+        const d = new Date(ds + 'T00:00:00');
+        return `${DOWS_FULL[d.getDay()]} ${d.getDate()} de ${MONTHS_FULL[d.getMonth()]}`;
+      }
+
+      function getAll() {
+        // all reservations assigned to this worker
+        return DB.allReservations({ employee_id: me.id });
+      }
+
+      function countsForMonth(year, month) {
+        const map = {};
+        getAll().forEach(r => {
+          const d = new Date(r.reserved_date + 'T00:00:00');
+          if (d.getFullYear() === year && d.getMonth() === month) {
+            map[r.reserved_date] = (map[r.reserved_date] || 0) + 1;
+          }
+        });
+        return map;
+      }
+
+      function rcard(x) {
+        return `
+          <div class="rcard" style="grid-template-columns: 80px 1fr auto">
+            <div class="rdate" style="display:flex;flex-direction:column;justify-content:center">
+              <div class="rday">${String(x.start_time).slice(0,5)}</div>
+              <div class="rmon">${String(x.end_time).slice(0,5)}</div>
+            </div>
+            <div class="rbody">
+              <div class="rserv">${escapeHtml(x.service)}</div>
+              <div class="rmeta">
+                <span class="avatar" style="width:20px;height:20px;vertical-align:-5px;margin-right:6px"><img src="${avatarUrl(x.client,40)}" alt=""></span>
+                ${escapeHtml(x.client)} · ${escapeHtml(x.client_phone || '')}
+              </div>
+              <div style="margin-top:8px">
+                <span class="badge ${x.status}">${x.status}</span>
+                <button class="btn btn-sm" data-id="${x.id}" data-st="completada">Completar</button>
+                <button class="btn btn-sm btn-danger" data-id="${x.id}" data-st="no_show">No vino</button>
+                <button class="btn btn-sm btn-danger" data-id="${x.id}" data-st="cancelada">Cancelar</button>
+              </div>
+            </div>
+            <div class="rright">
+              <div class="rprice">${Number(x.amount).toFixed(2)} €</div>
+              <div class="rcode">${escapeHtml(x.code)}</div>
+            </div>
+          </div>`;
+      }
+
+      let cal;
+      function onSelect(dateStr) {
+        const list = getAll().filter(r => r.reserved_date === dateStr);
+        const panel = document.getElementById('day-panel');
+        if (!list.length) {
+          panel.innerHTML = `
+            <div class="dphead">
+              <div class="dptitle">${fmtLong(dateStr)}</div>
+              <div class="dpcount">${dateStr}</div>
+            </div>
+            <div class="day-empty">
+              <div class="em-icon">○</div>
+              <div>No tienes reservas esta fecha.</div>
+            </div>`;
+          return;
+        }
+        panel.innerHTML = `
+          <div class="dphead">
+            <div class="dptitle">${fmtLong(dateStr)}</div>
+            <div class="dpcount">${list.length} cita${list.length === 1 ? '' : 's'}</div>
+          </div>
+          <div class="rgrid">${list.map(rcard).join('')}</div>`;
+        panel.querySelectorAll('button[data-id]').forEach(b => {
+          b.onclick = () => {
+            DB.updateReservationStatus(Number(b.dataset.id), b.dataset.st);
+            cal.refresh();
+            onSelect(dateStr);
+          };
+        });
+      }
+
+      cal = makeCalendar(document.getElementById('cal-container'), {
+        getDateCounts: countsForMonth,
+        onSelect,
+      });
+    }
+  </script>
+</body>
+</html>

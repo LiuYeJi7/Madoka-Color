@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Crear cuenta — BarberReserva</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-inner">
+      <a class="brand" href="index.html"><span class="brand-dot"></span> BarberReserva</a>
+      <div class="nav-spacer"></div>
+      <div id="nav-actions"></div>
+    </div>
+  </nav>
+
+  <main class="auth-wrap">
+    <div class="card narrow">
+      <h2>Crear cuenta</h2>
+      <p class="sub">Reserva tus citas en segundos. Te llevará menos de un minuto.</p>
+      <form id="register-form" novalidate>
+        <div class="form-row">
+          <label for="name">Nombre completo</label>
+          <input class="input" id="name" name="name" type="text" autocomplete="name" required />
+          <div class="field-error" data-for="name"></div>
+        </div>
+        <div class="form-row">
+          <label for="email">Email</label>
+          <input class="input" id="email" name="email" type="email" autocomplete="email" required />
+          <div class="field-error" data-for="email"></div>
+        </div>
+        <div class="form-row">
+          <label for="phone">Teléfono <span class="muted">(opcional)</span></label>
+          <input class="input" id="phone" name="phone" type="tel" autocomplete="tel" />
+        </div>
+        <div class="form-row">
+          <label for="age">Edad <span class="muted">(opcional)</span></label>
+          <input class="input" id="age" name="age" type="number" min="14" max="120" />
+        </div>
+        <div class="form-row">
+          <label for="password">Contraseña</label>
+          <input class="input" id="password" name="password" type="password" autocomplete="new-password" required minlength="6" />
+          <div class="password-meter"><div id="meter"></div></div>
+          <div class="field-error" data-for="password"></div>
+        </div>
+        <div class="form-row">
+          <label for="password2">Repite la contraseña</label>
+          <input class="input" id="password2" name="password2" type="password" autocomplete="new-password" required />
+          <div class="field-error" data-for="password2"></div>
+        </div>
+        <button class="btn btn-primary btn-block" type="submit" id="submit-btn">Crear cuenta</button>
+      </form>
+      <div class="divider"></div>
+      <p class="muted center">¿Ya tienes cuenta? <a href="login.html">Iniciar sesión</a></p>
+    </div>
+  </main>
+
+  <script src="shared.js"></script>
+  <script>
+    const form = document.getElementById('register-form');
+    const btn = document.getElementById('submit-btn');
+    const meter = document.getElementById('meter');
+    const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+
+    function setFieldError(name, msg) {
+      const input = form.querySelector(`[name="${name}"]`);
+      const err = form.querySelector(`.field-error[data-for="${name}"]`);
+      if (!input) return;
+      if (msg) { input.classList.add('invalid'); if (err) err.textContent = msg; }
+      else { input.classList.remove('invalid'); if (err) err.textContent = ''; }
+    }
+    form.querySelectorAll('input').forEach(i => i.addEventListener('input', () => setFieldError(i.name, '')));
+
+    form.password.addEventListener('input', () => {
+      const v = form.password.value;
+      let score = 0;
+      if (v.length >= 6) score++;
+      if (v.length >= 10) score++;
+      if (/[A-Z]/.test(v) && /[a-z]/.test(v)) score++;
+      if (/\d/.test(v)) score++;
+      if (/[^A-Za-z0-9]/.test(v)) score++;
+      const pct = Math.min(100, score * 20);
+      meter.style.width = pct + '%';
+      meter.style.background = pct < 40 ? '#f87171' : pct < 70 ? '#fbbf24' : '#4ade80';
+    });
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      clearError(form);
+      ['name','email','password','password2'].forEach(n => setFieldError(n, ''));
+
+      const name = form.name.value.trim();
+      const email = form.email.value.trim().toLowerCase();
+      const phone = form.phone.value.trim();
+      const age = form.age.value ? Number(form.age.value) : null;
+      const password = form.password.value;
+      const password2 = form.password2.value;
+
+      let invalid = false;
+      if (name.length < 2) { setFieldError('name', 'Introduce tu nombre completo.'); invalid = true; }
+      if (!EMAIL_RE.test(email)) { setFieldError('email', 'Email no válido.'); invalid = true; }
+      if (password.length < 6) { setFieldError('password', 'Mínimo 6 caracteres.'); invalid = true; }
+      if (password !== password2) { setFieldError('password2', 'Las contraseñas no coinciden.'); invalid = true; }
+      if (invalid) return;
+
+      btn.disabled = true; btn.textContent = 'Creando cuenta…';
+      try {
+        await DB.register({ name, email, phone, age, password });
+        location.href = 'book.html?welcome=1';
+      } catch (err) {
+        btn.disabled = false; btn.textContent = 'Crear cuenta';
+        if (/email/i.test(err.message)) setFieldError('email', err.message);
+        else showError(form, err.message || 'No se pudo crear la cuenta.');
+      }
+    });
+  </script>
+</body>
+</html>

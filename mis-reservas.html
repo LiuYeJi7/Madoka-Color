@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mis reservas — BarberReserva</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-inner">
+      <a class="brand" href="index.html"><span class="brand-dot"></span> BarberReserva</a>
+      <div class="nav-spacer"></div>
+      <div id="nav-actions"></div>
+    </div>
+  </nav>
+
+  <main class="container">
+    <div class="between" style="margin-bottom:18px">
+      <div>
+        <h2 style="margin:0">Mis reservas</h2>
+        <p class="muted" id="count" style="margin:4px 0 0"></p>
+      </div>
+      <a class="btn btn-primary" href="book.html">Nueva reserva</a>
+    </div>
+
+    <div class="cal-wrap">
+      <div id="cal-container"></div>
+      <div class="day-panel" id="day-panel"></div>
+    </div>
+  </main>
+
+  <script src="shared.js"></script>
+  <script>
+    const me = DB.me();
+    if (!me) location.href = 'login.html';
+    else if (me.role !== 'client') {
+      location.href = me.role === 'admin' ? 'admin.html' : 'dashboard.html';
+    } else {
+      const list = DB.myReservations();
+      document.getElementById('count').textContent = list.length === 0
+        ? 'Aún no has reservado nada. Pulsa "Nueva reserva" para empezar.'
+        : list.length + ' reserva' + (list.length === 1 ? '' : 's') + ' en total. Selecciona un día del calendario.';
+
+      function countsForMonth(year, month) {
+        const map = {};
+        list.forEach(r => {
+          const d = new Date(r.reserved_date + 'T00:00:00');
+          if (d.getFullYear() === year && d.getMonth() === month) {
+            map[r.reserved_date] = (map[r.reserved_date] || 0) + 1;
+          }
+        });
+        return map;
+      }
+
+      const MES = ['ENE','FEB','MAR','ABR','MAY','JUN','JUL','AGO','SEP','OCT','NOV','DIC'];
+      const MONTHS_FULL = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+      const DOWS_FULL = ['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
+
+      function fmtLong(ds) {
+        const d = new Date(ds + 'T00:00:00');
+        return `${DOWS_FULL[d.getDay()]} ${d.getDate()} de ${MONTHS_FULL[d.getMonth()]}`;
+      }
+
+      function card(x) {
+        return `
+          <div class="rcard" style="grid-template-columns: 1fr auto">
+            <div class="rbody">
+              <div class="rserv">${escapeHtml(x.service)}</div>
+              <div class="rmeta">
+                <span class="avatar" style="width:20px;height:20px;vertical-align:-5px;margin-right:6px"><img src="${avatarUrl(x.employee,40)}" alt=""></span>
+                ${escapeHtml(x.employee)} · ${String(x.start_time).slice(0,5)} – ${String(x.end_time).slice(0,5)}
+              </div>
+              <div style="margin-top:8px">
+                <span class="badge ${x.status}">${x.status}</span>
+                <span class="badge ${x.payment_status}">${x.payment_status}</span>
+              </div>
+            </div>
+            <div class="rright">
+              <div class="rprice">${Number(x.amount).toFixed(2)} €</div>
+              <div class="rcode">${escapeHtml(x.code)}</div>
+            </div>
+          </div>`;
+      }
+
+      function onSelect(dateStr) {
+        const dayList = list.filter(r => r.reserved_date === dateStr);
+        const panel = document.getElementById('day-panel');
+        if (!dayList.length) {
+          panel.innerHTML = `
+            <div class="dphead">
+              <div class="dptitle">${fmtLong(dateStr)}</div>
+              <div class="dpcount">${dateStr}</div>
+            </div>
+            <div class="day-empty">
+              <div class="em-icon">○</div>
+              <div>No tienes reservas en esta fecha.</div>
+              <div style="margin-top:10px"><a class="btn btn-sm btn-primary" href="book.html">Reservar este día</a></div>
+            </div>`;
+          return;
+        }
+        panel.innerHTML = `
+          <div class="dphead">
+            <div class="dptitle">${fmtLong(dateStr)}</div>
+            <div class="dpcount">${dayList.length} reserva${dayList.length === 1 ? '' : 's'}</div>
+          </div>
+          <div class="rgrid">${dayList.map(card).join('')}</div>`;
+      }
+
+      makeCalendar(document.getElementById('cal-container'), {
+        getDateCounts: countsForMonth,
+        onSelect,
+      });
+    }
+  </script>
+</body>
+</html>

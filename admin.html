@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Panel administrador — BarberReserva</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-inner">
+      <a class="brand" href="index.html"><span class="brand-dot"></span> BarberReserva</a>
+      <div class="nav-spacer"></div>
+      <div id="nav-actions"></div>
+    </div>
+  </nav>
+
+  <main class="container">
+    <h2 style="margin-top:0">Panel administrador</h2>
+    <p class="muted" id="month-label"></p>
+
+    <div class="grid-3">
+      <div class="stat"><div class="label">Ingresos del mes</div><div class="value" id="kpi-rev">—</div></div>
+      <div class="stat"><div class="label">Reservas del mes</div><div class="value" id="kpi-res">—</div></div>
+      <div class="stat"><div class="label">Empleados activos</div><div class="value" id="kpi-emp">—</div></div>
+    </div>
+
+    <div class="grid-2" style="margin-top:18px">
+      <div class="card">
+        <h3 style="margin-top:0">Ingresos por día</h3>
+        <div id="day-chart"></div>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0">Servicios más solicitados</h3>
+        <div id="top-services"></div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:18px">
+      <h3 style="margin-top:0">Reservas de los trabajadores</h3>
+      <p class="muted" style="margin-top:0">Filtra por trabajador y elige un día del calendario para ver las reservas.</p>
+      <div class="filters">
+        <div class="form-row">
+          <label for="f-emp">Trabajador</label>
+          <select class="select" id="f-emp"><option value="">Todos</option></select>
+        </div>
+      </div>
+      <div class="cal-wrap" style="margin-top:8px">
+        <div id="cal-container"></div>
+        <div class="day-panel" id="day-panel"></div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:18px">
+      <h3 style="margin-top:0">Comisiones por empleado</h3>
+      <table class="table">
+        <thead><tr><th>Empleado</th><th>Reservas</th><th>Ingresos</th><th>% Comisión</th><th>Total comisión</th></tr></thead>
+        <tbody id="commissions"></tbody>
+      </table>
+    </div>
+  </main>
+
+  <script src="shared.js"></script>
+  <script>
+    const me = DB.me();
+    if (!me || me.role !== 'admin') location.href = 'login.html';
+    else {
+      const d = DB.adminStats();
+      document.getElementById('month-label').textContent = 'Mes en curso: ' + d.month;
+      document.getElementById('kpi-rev').textContent = Number(d.totals.revenue).toFixed(2) + ' €';
+      document.getElementById('kpi-res').textContent = d.totals.reservations;
+      document.getElementById('kpi-emp').textContent = DB.employeesCount();
+
+      function bar(label, val, max) {
+        const pct = max > 0 ? Math.round((val / max) * 100) : 0;
+        return `<div class="bar-row"><span class="label">${escapeHtml(label)}</span><span class="bar"><i style="width:${pct}%"></i></span><span class="val">${val}</span></div>`;
+      }
+
+      const maxRev = Math.max(1, ...d.byDay.map(x => Number(x.revenue) || 0));
+      document.getElementById('day-chart').innerHTML = d.byDay.length
+        ? d.byDay.map(x => bar(String(x.day).slice(5), Number(x.revenue).toFixed(2), maxRev)).join('')
+        : '<p class="muted">Aún no hay datos este mes. Crea una reserva como cliente para ver el panel con datos.</p>';
+
+      const maxC = Math.max(1, ...d.topServices.map(x => x.count));
+      document.getElementById('top-services').innerHTML = d.topServices.length
+        ? d.topServices.map(x => bar(x.name, x.count, maxC)).join('')
+        : '<p class="muted">Aún no hay datos.</p>';
+
+      const tbody = document.getElementById('commissions');
+      d.commissions.forEach(c => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${escapeHtml(c.name)}</td>
+          <td>${c.reservations}</td>
+          <td>${Number(c.gross).toFixed(2)} €</td>
+          <td>${Number(c.commission_rate).toFixed(0)}%</td>
+          <td><strong>${Number(c.commission).toFixed(2)} €</strong></td>`;
+        tbody.appendChild(tr);
+      });
+
+      // ---- Reservas de los trabajadores (calendario) --------------------
+      const empSel = document.getElementById('f-emp');
+      DB.employees().forEach(e => {
+        const opt = document.createElement('option');
+        opt.value = e.id; opt.textContent = e.name;
+        empSel.appendChild(opt);
+      });
+
+      const MONTHS_FULL = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+      const DOWS_FULL = ['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
+      function fmtLong(ds) {
+        const dt = new Date(ds + 'T00:00:00');
+        return `${DOWS_FULL[dt.getDay()]} ${dt.getDate()} de ${MONTHS_FULL[dt.getMonth()]}`;
+      }
+
+      function currentList() {
+        const filters = {};
+        if (empSel.value) filters.employee_id = Number(empSel.value);
+        return DB.allReservations(filters);
+      }
+
+      function countsForMonth(year, month) {
+        const map = {};
+        currentList().forEach(r => {
+          const dt = new Date(r.reserved_date + 'T00:00:00');
+          if (dt.getFullYear() === year && dt.getMonth() === month) {
+            map[r.reserved_date] = (map[r.reserved_date] || 0) + 1;
+          }
+        });
+        return map;
+      }
+
+      function rcard(x) {
+        return `
+          <div class="rcard" style="grid-template-columns: 80px 1fr auto">
+            <div class="rdate" style="display:flex;flex-direction:column;justify-content:center">
+              <div class="rday">${String(x.start_time).slice(0,5)}</div>
+              <div class="rmon">${String(x.end_time).slice(0,5)}</div>
+            </div>
+            <div class="rbody">
+              <div class="rserv">${escapeHtml(x.service || '—')}</div>
+              <div class="rmeta">
+                <span class="avatar" style="width:20px;height:20px;vertical-align:-5px;margin-right:6px"><img src="${avatarUrl(x.employee,40)}" alt=""></span>
+                <strong>${escapeHtml(x.employee || '—')}</strong> · cliente: ${escapeHtml(x.client || '—')} ${x.client_phone ? '(' + escapeHtml(x.client_phone) + ')' : ''}
+              </div>
+              <div style="margin-top:8px">
+                <span class="badge ${x.status}">${x.status}</span>
+                <span class="badge ${x.payment_status}">${x.payment_status}</span>
+                <button class="btn btn-sm" data-id="${x.id}" data-st="completada">Completar</button>
+                <button class="btn btn-sm btn-danger" data-id="${x.id}" data-st="cancelada">Cancelar</button>
+                <button class="btn btn-sm btn-danger" data-id="${x.id}" data-st="no_show">No vino</button>
+                <button class="btn btn-sm" data-id="${x.id}" data-st="pendiente">Reabrir</button>
+              </div>
+            </div>
+            <div class="rright">
+              <div class="rprice">${Number(x.amount).toFixed(2)} €</div>
+              <div class="rcode">${escapeHtml(x.code)}</div>
+            </div>
+          </div>`;
+      }
+
+      let cal;
+      function onSelect(dateStr) {
+        const list = currentList().filter(r => r.reserved_date === dateStr);
+        const panel = document.getElementById('day-panel');
+        if (!list.length) {
+          panel.innerHTML = `
+            <div class="dphead">
+              <div class="dptitle">${fmtLong(dateStr)}</div>
+              <div class="dpcount">${dateStr}</div>
+            </div>
+            <div class="day-empty">
+              <div class="em-icon">○</div>
+              <div>No hay reservas en esta fecha${empSel.value ? ' para este trabajador' : ''}.</div>
+            </div>`;
+          return;
+        }
+        panel.innerHTML = `
+          <div class="dphead">
+            <div class="dptitle">${fmtLong(dateStr)}</div>
+            <div class="dpcount">${list.length} reserva${list.length === 1 ? '' : 's'}</div>
+          </div>
+          <div class="rgrid">${list.map(rcard).join('')}</div>`;
+        panel.querySelectorAll('button[data-id]').forEach(b => {
+          b.onclick = () => {
+            DB.updateReservationStatus(Number(b.dataset.id), b.dataset.st);
+            cal.refresh();
+            onSelect(dateStr);
+          };
+        });
+      }
+
+      empSel.addEventListener('change', () => {
+        if (cal) { cal.refresh(); onSelect(cal.getSelected()); }
+      });
+
+      cal = makeCalendar(document.getElementById('cal-container'), {
+        getDateCounts: countsForMonth,
+        onSelect,
+      });
+    }
+  </script>
+</body>
+</html>

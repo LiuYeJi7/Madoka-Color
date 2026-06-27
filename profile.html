@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mi perfil — BarberReserva</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-inner">
+      <a class="brand" href="index.html"><span class="brand-dot"></span> BarberReserva</a>
+      <div class="nav-spacer"></div>
+      <div id="nav-actions"></div>
+    </div>
+  </nav>
+
+  <main class="container">
+    <h2 style="margin-top:0">Mi perfil</h2>
+
+    <div class="profile-hero">
+      <img id="avatar" alt="Avatar" />
+      <div>
+        <div id="pname" class="pname">—</div>
+        <span id="prole" class="prole">—</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="between" style="margin-bottom:14px">
+        <h3 style="margin:0">Datos personales</h3>
+        <button class="btn btn-sm" id="edit-btn">Editar</button>
+      </div>
+
+      <div id="view-mode" class="profile-info">
+        <div class="info-item"><div class="ilabel">Nombre completo</div><div class="ivalue" id="v-name">—</div></div>
+        <div class="info-item"><div class="ilabel">Email</div><div class="ivalue" id="v-email">—</div></div>
+        <div class="info-item"><div class="ilabel">Teléfono</div><div class="ivalue" id="v-phone">—</div></div>
+        <div class="info-item"><div class="ilabel">Edad</div><div class="ivalue" id="v-age">—</div></div>
+        <div class="info-item" id="v-comm-wrap" style="display:none"><div class="ilabel">% Comisión</div><div class="ivalue" id="v-comm">—</div></div>
+      </div>
+
+      <form id="edit-mode" style="display:none">
+        <div class="profile-info">
+          <div class="form-row">
+            <label for="e-name">Nombre completo</label>
+            <input class="input" id="e-name" name="name" />
+          </div>
+          <div class="form-row">
+            <label>Email</label>
+            <input class="input" id="e-email" disabled />
+          </div>
+          <div class="form-row">
+            <label for="e-phone">Teléfono</label>
+            <input class="input" id="e-phone" name="phone" type="tel" />
+          </div>
+          <div class="form-row">
+            <label for="e-age">Edad</label>
+            <input class="input" id="e-age" name="age" type="number" min="14" max="120" />
+          </div>
+        </div>
+        <div style="margin-top:14px; display:flex; gap:8px">
+          <button class="btn btn-primary" type="submit">Guardar</button>
+          <button class="btn" type="button" id="cancel-btn">Cancelar</button>
+        </div>
+      </form>
+    </div>
+
+    <div id="employee-extra" style="display:none; margin-top:18px"></div>
+  </main>
+
+  <script src="shared.js"></script>
+  <script>
+    const me = DB.me();
+    if (!me) { location.href = 'login.html'; }
+
+    function fmt(v) { return v == null || v === '' ? '—' : v; }
+    function roleLabel(r) { return r === 'admin' ? 'Administrador' : r === 'employee' ? 'Trabajador' : 'Cliente'; }
+
+    function paint() {
+      const m = DB.me();
+      document.getElementById('avatar').src = avatarUrl(m.name, 220);
+      document.getElementById('pname').textContent = m.name;
+      document.getElementById('prole').textContent = roleLabel(m.role);
+      document.getElementById('v-name').textContent = fmt(m.name);
+      document.getElementById('v-email').textContent = fmt(m.email);
+      document.getElementById('v-phone').textContent = fmt(m.phone);
+      document.getElementById('v-age').textContent = m.age ? (m.age + ' años') : '—';
+      if (m.role === 'employee') {
+        document.getElementById('v-comm-wrap').style.display = '';
+        document.getElementById('v-comm').textContent = (m.commission_rate || 30) + '%';
+      }
+      document.getElementById('e-name').value = m.name || '';
+      document.getElementById('e-email').value = m.email || '';
+      document.getElementById('e-phone').value = m.phone || '';
+      document.getElementById('e-age').value = m.age || '';
+
+      // Worker extra: upcoming reservations
+      if (m.role === 'employee') {
+        const list = DB.upcomingForEmployee(m.id);
+        const box = document.getElementById('employee-extra');
+        box.style.display = '';
+        box.innerHTML = `
+          <div class="card">
+            <h3 style="margin-top:0">Mis próximas reservas (${list.length})</h3>
+            ${list.length === 0 ? '<p class="muted">Sin reservas próximas.</p>' :
+              '<div class="rgrid">' + list.map(x => `
+                <div class="rcard">
+                  <div class="rdate">
+                    <div class="rday">${x.reserved_date.slice(8,10)}</div>
+                    <div class="rmon">${x.reserved_date.slice(0,7)}</div>
+                  </div>
+                  <div class="rbody">
+                    <div class="rserv">${escapeHtml(x.service)}</div>
+                    <div class="rmeta">${escapeHtml(x.client)} · ${String(x.start_time).slice(0,5)} – ${String(x.end_time).slice(0,5)}</div>
+                  </div>
+                  <div class="rright">
+                    <div class="rprice">${Number(x.amount).toFixed(2)} €</div>
+                    <div class="rcode">${escapeHtml(x.code)}</div>
+                  </div>
+                </div>`).join('') + '</div>'}
+          </div>`;
+      }
+    }
+    paint();
+
+    const viewEl = document.getElementById('view-mode');
+    const editEl = document.getElementById('edit-mode');
+    document.getElementById('edit-btn').onclick = () => {
+      const editing = editEl.style.display !== 'none';
+      editEl.style.display = editing ? 'none' : '';
+      viewEl.style.display = editing ? '' : 'none';
+    };
+    document.getElementById('cancel-btn').onclick = () => {
+      editEl.style.display = 'none'; viewEl.style.display = '';
+    };
+    editEl.addEventListener('submit', (e) => {
+      e.preventDefault();
+      DB.updateProfile({
+        name: document.getElementById('e-name').value.trim(),
+        phone: document.getElementById('e-phone').value.trim(),
+        age: document.getElementById('e-age').value ? Number(document.getElementById('e-age').value) : null,
+      });
+      editEl.style.display = 'none'; viewEl.style.display = '';
+      paint();
+      renderNav();
+    });
+  </script>
+</body>
+</html>
