@@ -18,8 +18,8 @@ El sistema cuenta con tres entornos completamente diferenciados mediante roles:
 
 ## 📊 Catálogo de Servicios Real (Madoka Color)
 
-| Servicio | Tarifa | Duración | Ícono (`styles.css`) |
-| :--- | :--- | :--- | :--- |
+| Servicio | Tarifa | Duración |
+| :--- | :--- | :--- |
 | **Corte de cabello** | 15.00 Soles | 30 min |
 | **Corte + Barba** | 22.00 Soles | 45 min |
 | **Arreglo de barba** | 10.00 Soles | 20 min |
