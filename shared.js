@@ -26,35 +26,36 @@ function seedIfEmpty() {
     if (changed) save(s);
     return s;
   }
-  s = {
+s = {
     users: [
-      { id: 1, name: 'Administrador', email: 'admin@demo.com', phone: '600 000 000', age: 38, role: 'admin', password: 'admin123' },
-      { id: 2, name: 'Carlos Pérez', email: 'carlos@demo.com', phone: '611 111 111', age: 29, role: 'employee', commission_rate: 30, password: 'empleado123' },
-      { id: 3, name: 'Lucía Gómez', email: 'lucia@demo.com', phone: '622 222 222', age: 32, role: 'employee', commission_rate: 35, password: 'empleado123' },
+      { id: 1, name: 'Javier (Administrador)', email: 'admin@peluqueria.com', phone: '954936982', age: 35, role: 'admin', password: 'admin' },
+      { id: 2, name: 'Marizol', email: 'marizol@peluqueria.com', phone: '999111111', age: 25, role: 'employee', commission_rate: 30, password: '123' },
+      { id: 3, name: 'Trabajador Dos', email: 't2@peluqueria.com', phone: '999222222', age: 28, role: 'employee', commission_rate: 30, password: '123' },
+      { id: 4, name: 'Trabajador Tres', email: 't3@peluqueria.com', phone: '999333333', age: 30, role: 'employee', commission_rate: 30, password: '123' },
+      { id: 5, name: 'Trabajador Cuatro', email: 't4@peluqueria.com', phone: '999444444', age: 24, role: 'employee', commission_rate: 30, password: '123' },
     ],
     services: [
-      { id: 1, name: 'Corte de cabello', category: 'Corte', duration_minutes: 30, price: 15, icon: 'scissors' },
-      { id: 2, name: 'Corte + Barba', category: 'Corte', duration_minutes: 45, price: 22, icon: 'razor' },
-      { id: 3, name: 'Arreglo de barba', category: 'Barba', duration_minutes: 20, price: 10, icon: 'beard' },
-      { id: 4, name: 'Tinte completo', category: 'Color', duration_minutes: 90, price: 45, icon: 'paint' },
-      { id: 5, name: 'Tratamiento capilar', category: 'Tratamientos', duration_minutes: 60, price: 30, icon: 'spark' },
+      { id: 1, name: 'Corte barberia', category: 'Corte', duration_minutes: 35, price: 15, icon: 'scissors' },
+      { id: 2, name: 'Corte clasico', category: 'Corte', duration_minutes: 35, price: 15, icon: 'scissors' },
+      { id: 3, name: 'Corte escolar', category: 'Corte', duration_minutes: 30, price: 15, icon: 'scissors' },
+      { id: 4, name: 'Corte + color', category: 'Color', duration_minutes: 90, price: 50, icon: 'paint' },
+      { id: 5, name: 'Corte + semipermanente', category: 'Tratamientos', duration_minutes: 90, price: 50, icon: 'spark' },
+      { id: 6, name: 'Corte + depilacion de cejas', category: 'Corte', duration_minutes: 45, price: 20, icon: 'razor' },
     ],
     employee_services: [
-      { employee_id: 2, service_id: 1 }, { employee_id: 2, service_id: 2 }, { employee_id: 2, service_id: 3 },
-      { employee_id: 2, service_id: 4 }, { employee_id: 2, service_id: 5 },
-      { employee_id: 3, service_id: 1 }, { employee_id: 3, service_id: 2 }, { employee_id: 3, service_id: 3 },
-      { employee_id: 3, service_id: 4 }, { employee_id: 3, service_id: 5 },
+      ...[2,3,4,5].flatMap(eid => [1,2,3,4,5,6].map(sid => ({ employee_id: eid, service_id: sid })))
     ],
     schedules: (() => {
       const out = [];
-      for (const eid of [2, 3]) {
-        for (let d = 1; d <= 6; d++) out.push({ employee_id: eid, day_of_week: d, start_time: '10:00', end_time: '19:00' });
+      // Definimos el horario de atención exacto: de 10:00 AM a 5:00 PM (17:00)
+      for (const eid of [2, 3, 4, 5]) {
+        for (let d = 1; d <= 6; d++) out.push({ employee_id: eid, day_of_week: d, start_time: '10:00', end_time: '17:00' });
       }
       return out;
     })(),
     reservations: [],
     session: null,
-    next_user_id: 4,
+    next_user_id: 6,
     next_reservation_id: 1,
   };
   save(s);
@@ -163,13 +164,14 @@ const DB = {
     return { id: u.id, name: u.name, email: u.email, role: u.role, phone: u.phone, age: u.age };
   },
 
-  upcomingForEmployee(employeeId) {
+upcomingForEmployee(employeeId) {
     const s = DB.state();
     const today = new Date().toISOString().slice(0, 10);
     return s.reservations
-      .filter(r => r.employee_id === employeeId && r.reserved_date >= today && (r.status === 'pendiente' || r.status === 'completada'))
+      // Quitamos 'completada' para que solo se queden las pendientes en la lista del trabajador
+      .filter(r => r.employee_id === employeeId && r.reserved_date >= today && r.status === 'pendiente')
       .map(r => ({
-        ...r,
+        ...r,   
         service: (s.services.find(x => x.id === r.service_id) || {}).name,
         client: (s.users.find(u => u.id === r.client_id) || {}).name,
         client_phone: (s.users.find(u => u.id === r.client_id) || {}).phone,
@@ -208,7 +210,9 @@ const DB = {
         const ss = cur, ee = cur + svc.duration_minutes;
         const overlaps = busy.some(r => !(ee <= toMin(r.start_time) || ss >= toMin(r.end_time)));
         if (!overlaps) slots.push(toHHMM(ss));
-        cur += 15;
+        
+        // CAMBIO CRÍTICO: Avanzar exactamente los minutos que dura el servicio
+        cur += svc.duration_minutes; 
       }
     }
     return { slots, duration: svc.duration_minutes };
